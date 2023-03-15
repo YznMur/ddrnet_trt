@@ -17,7 +17,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(/usr/src/tensorrt/include/)
 link_directories(/usr/src/tensorrt/lib/)
 
-find_package(OpenCV 4.5.4 REQUIRED)
+find_package(OpenCV 3.3 REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 add_executable(ddrnet ${PROJECT_SOURCE_DIR}/ddrnet.cpp)
