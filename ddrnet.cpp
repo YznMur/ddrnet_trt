@@ -247,6 +247,76 @@ void doInference(IExecutionContext& context, float* input, float* output) {
     CHECK(cudaFree(buffers[outputIndex]));
 }
 
+cv::Mat ddrnetPredict( cv::Mat &img ){
+
+    cv::Mat pr_img = img.clone();
+    int w_img = pr_img.cols;
+    int h_img = pr_img.rows;
+    cudaSetDevice(DEVICE);
+    // create a model using the API directly and serialize it to a stream
+    char *trtModelStream{ nullptr };
+    size_t size{ 0 }; 
+
+
+    // loading input model ---------------------------
+    std::ifstream file("DDRNet.engine", std::ios::binary);
+    if (file.good()) {
+        file.seekg(0, file.end);
+        size = file.tellg();
+        file.seekg(0, file.beg);
+        trtModelStream = new char[size];
+        assert(trtModelStream);
+        file.read(trtModelStream, size);
+        file.close();
+    }
+
+    // prepare input data ---------------------------
+    IRuntime* runtime = createInferRuntime(gLogger);
+    assert(runtime != nullptr);
+    ICudaEngine* engine = runtime->deserializeCudaEngine(trtModelStream, size);
+    assert(engine != nullptr);
+    IExecutionContext* context = engine->createExecutionContext();
+    assert(context != nullptr);
+    delete[] trtModelStream;
+
+    std::vector<float> mean_value{ 0.406, 0.456, 0.485 };  // BGR
+    std::vector<float> std_value{ 0.225, 0.224, 0.229 };
+    cv::resize(pr_img,pr_img,cv::Size(INPUT_W,INPUT_H));
+
+    float* data = new float[3 * pr_img.rows * pr_img.cols];
+    int i = 0;
+    for (int row = 0; row < pr_img.rows; ++row) {
+        uchar* uc_pixel = pr_img.data + row * pr_img.step;
+        for (int col = 0; col < pr_img.cols; ++col) {
+            data[i] = (uc_pixel[2] / 255.0 - mean_value[2]) / std_value[2];
+            data[i + pr_img.rows * pr_img.cols] = (uc_pixel[1] / 255.0 - mean_value[1]) / std_value[1];
+            data[i + 2 * pr_img.rows * pr_img.cols] = (uc_pixel[0] / 255.0 - mean_value[0]) / std_value[0];
+            uc_pixel += 3;
+            ++i;
+        }
+    }
+
+    float* prob = new float[ 19* OUT_MAP_H* OUT_MAP_W];
+    // Run inference
+    auto start = std::chrono::system_clock::now();
+    doInference(*context, data, prob);
+    auto end = std::chrono::system_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+    
+    cv::Mat out;
+    out.create(OUT_MAP_H, OUT_MAP_W, CV_32FC(19));
+    out = read2mat(prob, out);
+
+    cv::Mat mask;
+    mask.create(OUT_MAP_H, OUT_MAP_W, CV_8UC3);
+    mask = map2cityscape(out, mask);
+    cv::resize(mask,mask,v::Size(w_img,h_img));
+    delete prob;
+    delete data;
+
+    return mask;
+}
+
 int main(int argc, char** argv) {
     cudaSetDevice(DEVICE);
     // create a model using the API directly and serialize it to a stream
