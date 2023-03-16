@@ -310,7 +310,7 @@ cv::Mat ddrnetPredict( cv::Mat &img ){
     cv::Mat mask;
     mask.create(OUT_MAP_H, OUT_MAP_W, CV_8UC3);
     mask = map2cityscape(out, mask);
-    cv::resize(mask,mask,v::Size(w_img,h_img));
+    cv::resize(mask,mask,cv::Size(w_img,h_img));
     delete prob;
     delete data;
 
